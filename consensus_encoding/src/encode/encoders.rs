@@ -217,14 +217,14 @@ macro_rules! define_encoder_n {
             $($enc_field: $enc_ty,)*
         }
 
-        impl<$($enc_ty: Encoder,)*> $name<$($enc_ty,)*> {
+        impl<$($enc_ty,)*> $name<$($enc_ty,)*> {
             /// Constructs a new composite encoder.
-            pub fn new($($enc_field: $enc_ty,)*) -> Self {
-                let mut this = Self { cur_idx: 0, $($enc_field,)* };
-                this.skip_empty();
-                this
+            pub const fn new($($enc_field: $enc_ty,)*) -> Self {
+                Self { cur_idx: 0, $($enc_field,)* }
             }
+        }
 
+        impl<$($enc_ty: Encoder,)*> $name<$($enc_ty,)*> {
             #[inline]
             fn skip_empty(&mut self) {
                 $(
@@ -252,6 +252,15 @@ macro_rules! define_encoder_n {
             fn advance(&mut self) -> EncoderStatus {
                 $(
                     if self.cur_idx == $enc_idx {
+                        if self.$enc_field.current_chunk().is_empty() {
+                            self.cur_idx += 1;
+                            self.skip_empty();
+                            return if self.cur_idx == $idx_limit {
+                                EncoderStatus::Finished
+                            } else {
+                                EncoderStatus::HasMore
+                            };
+                        }
                         if self.$enc_field.advance().has_more() {
                             return EncoderStatus::HasMore;
                         }
