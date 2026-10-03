@@ -431,7 +431,7 @@ pub fn check_encode<T: Encode + ?Sized>(value: &T, expected: &[u8]) {
 /// Note that the function does not impose any requirements on chunking - whether the encoded bytes
 /// are returned as a few large chunks or they are many smaller chunks makes no difference (other
 /// than potentially performance difference), as long as the bytes yielded are what is expected, in
-/// the correct order.
+/// the correct order. It also checks that an empty chunk is only returned for an exhausted encoder.
 ///
 /// This is intended for tests only.
 ///
@@ -446,6 +446,7 @@ pub fn check_encoder<T: Encoder + ?Sized>(encoder: &mut T, mut expected: &[u8]) 
 
     loop {
         let chunk = encoder.current_chunk();
+        let chunk_is_empty = chunk.is_empty();
         assert!(
             chunk.len() <= expected.len(),
             "encoder yielded more bytes ({}) than expected ({})",
@@ -464,7 +465,11 @@ pub fn check_encoder<T: Encoder + ?Sized>(encoder: &mut T, mut expected: &[u8]) 
         bytes_processed += chunk.len();
         expected = &expected[chunk.len()..];
         chunk_number += 1;
-        if encoder.advance().has_finished() {
+        let status = encoder.advance();
+        if chunk_is_empty {
+            assert!(status.has_finished(), "encoder yielded an empty chunk before the end");
+        }
+        if status.has_finished() {
             break;
         }
     }
